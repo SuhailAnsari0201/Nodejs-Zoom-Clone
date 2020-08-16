@@ -3,11 +3,13 @@ const videoGrid = document.getElementById("video-grid");
 const myVideo = document.createElement("video");
 myVideo.muted = true;
 
-var peer = new Peer(undefined, {
+var myPeer = new Peer(undefined, {
   path: "/peerjs",
   host: "/",
-  port: "443",
+  port: "3000",
 });
+
+const peers = {};
 
 let myVideoStream;
 navigator.mediaDevices
@@ -19,8 +21,10 @@ navigator.mediaDevices
     myVideoStream = stream;
     addVideoStream(myVideo, stream);
 
-    peer.on("call", (call) => {
+    // Recevive new user stream
+    myPeer.on("call", (call) => {
       call.answer(stream);
+      // Send group stream to new user as well
       const video = document.createElement("video");
       call.on("stream", (userVideoStream) => {
         addVideoStream(video, userVideoStream);
@@ -45,16 +49,25 @@ navigator.mediaDevices
     });
   });
 
-peer.on("open", (id) => {
+socket.on("user-disconnected", (userId) => {
+  if (peers[userId]) peers[userId].close();
+});
+
+myPeer.on("open", (id) => {
   socket.emit("join-room", ROOM_ID, id);
 });
 
 const connectToNewUser = (userId, stream) => {
-  const call = peer.call(userId, stream);
+  const call = myPeer.call(userId, stream);
   const video = document.createElement("video");
+  //send our stream to group stream
   call.on("stream", (userVideoStream) => {
     addVideoStream(video, userVideoStream);
   });
+  call.on("close", () => {
+    video.remove();
+  });
+  peers[userId] = call;
 };
 
 const addVideoStream = (video, stream) => {
@@ -66,7 +79,7 @@ const addVideoStream = (video, stream) => {
 };
 
 const scrollToBottom = () => {
-  let d = $(".main__chat_window");
+  var d = $(".main__chat_window");
   d.scrollTop(d.prop("scrollHeight"));
 };
 
